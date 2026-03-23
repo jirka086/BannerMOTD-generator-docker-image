@@ -1,1 +1,0 @@
-# BannerMOTD-generator-docker-image
