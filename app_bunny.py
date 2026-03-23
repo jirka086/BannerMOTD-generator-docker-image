@@ -147,7 +147,9 @@ async def index():
                         for(let msg of messages) {
                             if (msg.startsWith('data: ')) {
                                 try {
-                                    const data = JSON.parse(msg.substring(6));
+                                    const jsonString = msg.substring(6).trim();
+                                    if (!jsonString) continue;
+                                    const data = JSON.parse(jsonString);
                                     if (data.status === 'log') {
                                         logDiv.innerHTML += data.message + "\\n";
                                         logDiv.scrollTop = logDiv.scrollHeight;
@@ -162,8 +164,10 @@ async def index():
                                         dlLink.href = url;
                                         dlLink.download = "motd.json";
                                         dlLink.style.display = 'inline-block';
+                                        btn.disabled = false;
                                     } else if (data.status === 'error') {
                                         logDiv.innerHTML += `<span style="color:red">${data.message}</span>\\n`;
+                                        btn.disabled = false;
                                     }
                                 } catch (parseErr) {
                                     console.error("Failed to parse SSE data: ", msg, parseErr);
@@ -173,9 +177,8 @@ async def index():
                     }
                 } catch(e) {
                     logDiv.innerHTML += `<span style="color:red">Request failed: ${e}</span>\\n`;
+                    btn.disabled = false;
                 }
-                
-                btn.disabled = false;
             }
         </script>
     </body>
