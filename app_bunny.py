@@ -132,34 +132,41 @@ async def index():
                     
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
-                    let finalJsonStr = "";
+                    let buffer = "";
                     
                     while (true) {
                         const { value, done } = await reader.read();
                         if (done) break;
-                        const text = decoder.decode(value);
+                        buffer += decoder.decode(value, {stream: true});
                         
-                        // Parse Server-Sent Events roughly
-                        const lines = text.split('\\n');
-                        for(let line of lines) {
-                            if (line.startsWith('data: ')) {
-                                const data = JSON.parse(line.substring(6));
-                                if (data.status === 'log') {
-                                    logDiv.innerHTML += data.message + "\\n";
-                                    logDiv.scrollTop = logDiv.scrollHeight;
-                                } else if (data.status === 'complete') {
-                                    logDiv.innerHTML += "Done!\\n";
-                                    logDiv.scrollTop = logDiv.scrollHeight;
-                                    
-                                    // Make downloadable
-                                    const blob = new Blob([JSON.stringify(data.motd, null, 0)], {type: "application/json"});
-                                    const url = URL.createObjectURL(blob);
-                                    const dlLink = document.getElementById('downloadLink');
-                                    dlLink.href = url;
-                                    dlLink.download = "motd.json";
-                                    dlLink.style.display = 'inline-block';
-                                } else if (data.status === 'error') {
-                                    logDiv.innerHTML += `<span style="color:red">${data.message}</span>\\n`;
+                        // Parse Server-Sent Events with proper buffering
+                        let messages = buffer.split('\\n\\n');
+                        // The last element is either empty string (if it ended with \n\n) or an incomplete chunk
+                        buffer = messages.pop(); 
+                        
+                        for(let msg of messages) {
+                            if (msg.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(msg.substring(6));
+                                    if (data.status === 'log') {
+                                        logDiv.innerHTML += data.message + "\\n";
+                                        logDiv.scrollTop = logDiv.scrollHeight;
+                                    } else if (data.status === 'complete') {
+                                        logDiv.innerHTML += "Done!\\n";
+                                        logDiv.scrollTop = logDiv.scrollHeight;
+                                        
+                                        // Make downloadable
+                                        const blob = new Blob([JSON.stringify(data.motd, null, 0)], {type: "application/json"});
+                                        const url = URL.createObjectURL(blob);
+                                        const dlLink = document.getElementById('downloadLink');
+                                        dlLink.href = url;
+                                        dlLink.download = "motd.json";
+                                        dlLink.style.display = 'inline-block';
+                                    } else if (data.status === 'error') {
+                                        logDiv.innerHTML += `<span style="color:red">${data.message}</span>\\n`;
+                                    }
+                                } catch (parseErr) {
+                                    console.error("Failed to parse SSE data: ", msg, parseErr);
                                 }
                             }
                         }
