@@ -99,25 +99,26 @@ async def index():
         </div>
         <script>
             async function startGeneration() {
-                const fileInput = document.getElementById('imageInput');
-                if (fileInput.files.length === 0) {
-                    alert("Please select a file first.");
-                    return;
-                }
-                
-                const file = fileInput.files[0];
-                const btn = document.getElementById('generateBtn');
-                btn.disabled = true;
-                
-                document.getElementById('progressContainer').style.display = 'block';
-                const logDiv = document.getElementById('log');
-                logDiv.innerHTML = "Starting upload...\\n";
-                document.getElementById('downloadLink').style.display = 'none';
-
-                const formData = new FormData();
-                formData.append('file', file);
-                
                 try {
+                    console.log("Generating MOTD...");
+                    const fileInput = document.getElementById('imageInput');
+                    if (fileInput.files.length === 0) {
+                        alert("Please select a file first.");
+                        return;
+                    }
+                    
+                    const file = fileInput.files[0];
+                    const btn = document.getElementById('generateBtn');
+                    btn.disabled = true;
+                    
+                    document.getElementById('progressContainer').style.display = 'block';
+                    const logDiv = document.getElementById('log');
+                    logDiv.innerHTML = "Starting upload...\\n";
+                    document.getElementById('downloadLink').style.display = 'none';
+
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
                     const response = await fetch('/generate', {
                         method: 'POST',
                         body: formData
@@ -141,14 +142,16 @@ async def index():
                         
                         // Parse Server-Sent Events with proper buffering
                         let messages = buffer.split('\\n\\n');
-                        // The last element is either empty string (if it ended with \n\n) or an incomplete chunk
                         buffer = messages.pop(); 
                         
                         for(let msg of messages) {
-                            if (msg.startsWith('data: ')) {
+                            if (msg.trim().startsWith('data:')) {
                                 try {
-                                    const jsonString = msg.substring(6).trim();
-                                    if (!jsonString) continue;
+                                    // Make sure we correctly extract the json part even if there's slightly different spacing
+                                    let jsonStrStart = msg.indexOf('{');
+                                    if (jsonStrStart === -1) continue;
+                                    const jsonString = msg.substring(jsonStrStart).trim();
+                                    
                                     const data = JSON.parse(jsonString);
                                     if (data.status === 'log') {
                                         logDiv.innerHTML += data.message + "\\n";
@@ -158,26 +161,26 @@ async def index():
                                         logDiv.scrollTop = logDiv.scrollHeight;
                                         
                                         // Make downloadable
-                                        const blob = new Blob([JSON.stringify(data.motd, null, 0)], {type: "application/json"});
+                                        const blob = new Blob([JSON.stringify(data.motd, null, 2)], {type: "application/json"});
                                         const url = URL.createObjectURL(blob);
                                         const dlLink = document.getElementById('downloadLink');
                                         dlLink.href = url;
                                         dlLink.download = "motd.json";
                                         dlLink.style.display = 'inline-block';
-                                        btn.disabled = false;
                                     } else if (data.status === 'error') {
                                         logDiv.innerHTML += `<span style="color:red">${data.message}</span>\\n`;
-                                        btn.disabled = false;
                                     }
                                 } catch (parseErr) {
-                                    console.error("Failed to parse SSE data: ", msg, parseErr);
+                                    console.error("Failed to parse chunk: ", msg, parseErr);
                                 }
                             }
                         }
                     }
                 } catch(e) {
-                    logDiv.innerHTML += `<span style="color:red">Request failed: ${e}</span>\\n`;
-                    btn.disabled = false;
+                    console.error("Fetch request failed:", e);
+                    document.getElementById('log').innerHTML += `<span style="color:red">Request failed: ${e}</span>\\n`;
+                } finally {
+                    document.getElementById('generateBtn').disabled = false;
                 }
             }
         </script>
